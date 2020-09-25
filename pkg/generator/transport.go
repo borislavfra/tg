@@ -157,6 +157,20 @@ func (tr Transport) RenderServer(outDir string) (err error) {
 	return
 }
 
+func (tr Transport) RenderTSFiles(outDir string) (err error) {
+
+	tr.cleanup(outDir)
+
+	if err = os.MkdirAll(outDir, os.ModePerm); err != nil {
+		return
+	}
+
+	for _, svc := range tr.services {
+		err = svc.renderTSFiles(outDir)
+	}
+	return
+}
+
 func showError(log logrus.FieldLogger, err error, msg string) {
 	if err != nil {
 		log.WithError(err).Error(msg)

@@ -154,6 +154,26 @@ func main() {
 			UsageText:   "tg swagger --iface firstIface --iface secondIface",
 			Description: "generate swagger documentation by interfaces",
 		},
+		{
+			Name:   "typescript",
+			Usage:  "generate typescript files by interfaces in 'service' package",
+			Action: cmdTypescript,
+			Flags: []cli.Flag{
+				&cli.StringFlag{
+					Name:  "services",
+					Value: "./pkg/someService/service",
+					Usage: "path to services package",
+				},
+				&cli.StringFlag{
+					Name:  "out",
+					Value: "./pkg/ts_files",
+					Usage: "path to output files",
+				},
+			},
+
+			UsageText:   "tg client --services ./pkg/someService/service",
+			Description: "generate typescript files by interfaces ",
+		},
 	}
 
 	err := app.Run(os.Args)
@@ -264,4 +284,19 @@ func cmdSwagger(c *cli.Context) (err error) {
 		}
 	}
 	return
+}
+
+func cmdTypescript(c *cli.Context) (err error) {
+	defer func() {
+		if err == nil {
+			log.Info("done")
+		}
+	}()
+
+	var tr generator.Transport
+	if tr, err = generator.NewTransport(log, c.String("services")); err != nil {
+		return
+	}
+
+	return tr.RenderTSFiles(c.String("out"))
 }
