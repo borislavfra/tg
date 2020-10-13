@@ -84,7 +84,7 @@ func (svc *service) genResponseSchema(method *templateMethod, path string) (err 
 
 	srcFile := NewFile()
 
-	srcFile.Import("@hapi/joi", "default as Joi")
+	srcFile.Line().Add(Id("import Joi from '@hapi/joi';"))
 
 	srcFile.Export().Const().Id("responseSchema").E().Id("Joi.object").Params(
 		ValuesFunc(func(group *Group) {
