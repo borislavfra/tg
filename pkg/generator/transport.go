@@ -159,8 +159,6 @@ func (tr Transport) RenderServer(outDir string) (err error) {
 
 func (tr Transport) RenderTSFiles(outDir string) (err error) {
 
-	tr.cleanup(outDir)
-
 	if err = os.MkdirAll(outDir, os.ModePerm); err != nil {
 		return
 	}

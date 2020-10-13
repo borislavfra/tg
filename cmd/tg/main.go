@@ -166,7 +166,7 @@ func main() {
 				},
 				&cli.StringFlag{
 					Name:  "out",
-					Value: "./pkg/ts_files",
+					Value: "./pkg/api-front",
 					Usage: "path to output files",
 				},
 			},

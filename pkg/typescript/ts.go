@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"io"
 	"io/ioutil"
+	"os"
 	"strings"
 )
 
@@ -21,6 +22,47 @@ func (f *File) Save(filename string) error {
 		return err
 	}
 	if err := ioutil.WriteFile(filename, buf.Bytes(), 0644); err != nil {
+		return err
+	}
+	return nil
+}
+
+// AppendAfter renders the file and append data to the filename provided.
+// Finds the last match of string *last* and the next first match of string *first*
+// appends data after *first*
+func (f *File) AppendAfter(filename string, last string, first string) error {
+	buf := &bytes.Buffer{}
+	if err := f.Render(buf); err != nil {
+		return err
+	}
+
+	content, err := ioutil.ReadFile(filename)
+	if err != nil {
+		return err
+	}
+
+	file, err := os.OpenFile(filename, os.O_TRUNC|os.O_WRONLY|os.O_CREATE, 0644)
+	if err != nil {
+		return err
+	}
+	defer file.Close()
+
+	if lastMatch := bytes.LastIndex(content, []byte(last)); lastMatch != -1 {
+		if firstMatch := bytes.Index(content[lastMatch:], []byte(first)); firstMatch != -1 {
+			tmp := []byte{}
+			firstMatch += lastMatch + len(first)
+			tmp = append(tmp, content[:firstMatch]...)
+			tmp = append(tmp, buf.Bytes()...)
+			tmp = append(tmp, content[firstMatch:]...)
+
+			if _, err = file.Write(tmp); err != nil {
+				return err
+			}
+			return nil
+		}
+	}
+
+	if _, err = file.Write(buf.Bytes()); err != nil {
 		return err
 	}
 	return nil
