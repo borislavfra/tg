@@ -77,7 +77,7 @@ func (f *File) CheckRepetition(filename string, names []string) error {
 	for _, name := range names {
 		if bytes.Contains(content, []byte(name)) {
 			err = fmt.Errorf("Collision detected: %s already presented in %s file,"+
-				" please delete this file and run go generate ./... from project root folder ",
+				" please delete this file and run 'go generate ./...' from project root folder ",
 				name, filename)
 			return err
 		}
