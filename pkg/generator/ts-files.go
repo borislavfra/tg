@@ -124,6 +124,7 @@ func (svc *service) genMakeRequestConfig(method *templateMethod, path string) (e
 }
 
 func (svc *service) genMethodIndex(method *templateMethod, path string) (err error) {
+
 	srcFile := NewFile()
 
 	srcFile.Export().Op("* ").Op("from ").Id("'./request'")
@@ -213,11 +214,19 @@ func (svc *service) updateIndex(methods []*templateMethod, path string) (err err
 
 	srcFile := NewFile()
 
+	baseNames := []string{}
 	for _, method := range methods {
+		baseName := method.InterfaceBase.Name + method.Name
+		baseNames = append(baseNames, baseName)
+
 		srcFile.Export().Values(
-			Id("RequestParamsType").As().Id(method.InterfaceBase.Name+method.Name+"ParamsType"),
-			Id("ResponseType").As().Id(method.InterfaceBase.Name+method.Name+"ResponseType"),
+			Id("RequestParamsType").As().Id(baseName+"ParamsType"),
+			Id("ResponseType").As().Id(baseName+"ResponseType"),
 		).Op(" from ").Id("'./" + method.InterfaceBase.Name + "/" + utils.ToLowerCamel(method.Name) + "'").Op(";")
+	}
+
+	if err = srcFile.CheckRepetition(path, baseNames); err != nil {
+		return err
 	}
 
 	return srcFile.AppendAfter(path, "Type", ";")
@@ -252,14 +261,23 @@ func (svc *service) genApiCreator(methods []*templateMethod, path string) (err e
 }
 
 func (svc *service) updateApiCreator(methods []*templateMethod, path string) (err error) {
+
 	srcFile := NewFile()
 
+	baseNames := []string{}
 	for _, method := range methods {
-		reqName := method.InterfaceBase.Name + method.Name + "Request"
+		baseName := method.InterfaceBase.Name + method.Name
+		baseNames = append(baseNames, baseName)
+
+		reqName := baseName + "Request"
 		srcFile.Import("./"+method.InterfaceBase.Name+"/"+utils.ToLowerCamel(method.Name), "request as "+reqName)
 	}
 
-	if err = srcFile.AppendAfter(path, "import", ";"); err != nil {
+	if err = srcFile.CheckRepetition(path, baseNames); err != nil {
+		return err
+	}
+
+	if err = srcFile.AppendAfter(path, "import", "\n"); err != nil {
 		return err
 	}
 

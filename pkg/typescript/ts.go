@@ -68,6 +68,24 @@ func (f *File) AppendAfter(filename string, last string, first string) error {
 	return nil
 }
 
+func (f *File) CheckRepetition(filename string, names []string) error {
+	content, err := ioutil.ReadFile(filename)
+	if err != nil {
+		return err
+	}
+
+	for _, name := range names {
+		if bytes.Contains(content, []byte(name)) {
+			err = fmt.Errorf("Collision detected: %s already presented in %s file,"+
+				" please delete this file and run go generate ./... from project root folder ",
+				name, filename)
+			return err
+		}
+	}
+
+	return nil
+}
+
 // Render renders the file to the provided writer.
 func (f *File) Render(w io.Writer) error {
 	body := &bytes.Buffer{}
