@@ -68,6 +68,7 @@ func (f *File) AppendAfter(filename string, last string, first string) error {
 	return nil
 }
 
+// CheckRepetition checks if file contains any of names
 func (f *File) CheckRepetition(filename string, names []string) error {
 	content, err := ioutil.ReadFile(filename)
 	if err != nil {
