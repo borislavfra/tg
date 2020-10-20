@@ -163,8 +163,9 @@ func (tr Transport) RenderTSFiles(outDir string) (err error) {
 		return
 	}
 
+	sw := newSwagger(&tr)
 	for _, svc := range tr.services {
-		err = svc.renderTSFiles(outDir)
+		err = svc.renderTSFiles(outDir, sw)
 	}
 	return
 }

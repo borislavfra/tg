@@ -1,11 +1,13 @@
 package generator
 
 import (
-	. "github.com/seniorGolang/tg/pkg/typescript"
-	"github.com/seniorGolang/tg/pkg/utils"
 	"os"
 	"path"
 	"sort"
+	"strings"
+
+	. "github.com/seniorGolang/tg/pkg/typescript"
+	"github.com/seniorGolang/tg/pkg/utils"
 )
 
 const (
@@ -17,7 +19,7 @@ const (
 	apiCreatorF        = "/api-creator.ts"
 )
 
-func (svc *service) renderTSFiles(outDir string) (err error) {
+func (svc *service) renderTSFiles(outDir string, sw *swagger) (err error) {
 
 	svc.Name = utils.ToLowerCamel(svc.Name)
 	if _, err = os.Stat(path.Join(outDir, svc.Name)); os.IsNotExist(err) {
@@ -26,9 +28,14 @@ func (svc *service) renderTSFiles(outDir string) (err error) {
 		}
 	}
 
+	for _, method := range svc.methods {
+		sw.registerStruct(method.requestStructName(), svc.pkgPath, method.tags, method.argumentsWithUploads())
+		sw.registerStruct(method.responseStructName(), svc.pkgPath, method.tags, method.results())
+	}
+
 	convertedMethods := []*templateMethod{}
 	for _, originalMethod := range svc.Methods {
-		convertedMethods = append(convertedMethods, tsFunctionConverter(originalMethod, svc.Interface.Base))
+		convertedMethods = append(convertedMethods, tsFunctionConverter(originalMethod, svc.Interface.Base, sw))
 	}
 	sort.Slice(convertedMethods, func(i, j int) bool {
 		return convertedMethods[i].InterfaceBase.Name < convertedMethods[j].InterfaceBase.Name
@@ -66,7 +73,7 @@ func (svc *service) renderTSFiles(outDir string) (err error) {
 		if err = svc.genMakeRequestConfig(method, filePath+makeRequestConfigF); err != nil {
 			return
 		}
-		if err = svc.genTypes(method, filePath+typesF); err != nil {
+		if err = svc.genTypes(method, sw, filePath+typesF); err != nil {
 			return
 		}
 		if err = svc.genMethodIndex(method, filePath+indexF); err != nil {
@@ -88,7 +95,7 @@ func (svc *service) genResponseSchema(method *templateMethod, path string) (err 
 
 	srcFile.Export().Const().Id("responseSchema").E().Id("Joi.object").Params(
 		ValuesFunc(func(group *Group) {
-			for _, v := range method.Args {
+			for _, v := range method.Results {
 				group.Id(v.Base.Name).T().Id("Joi").Dot(v.Type.String()).Call().Dot("required").Call()
 			}
 		}),
@@ -133,7 +140,7 @@ func (svc *service) genMethodIndex(method *templateMethod, path string) (err err
 	return srcFile.Save(path)
 }
 
-func (svc *service) genTypes(method *templateMethod, path string) (err error) {
+func (svc *service) genTypes(method *templateMethod, sw *swagger, path string) (err error) {
 
 	srcFile := NewFile()
 
@@ -148,8 +155,32 @@ func (svc *service) genTypes(method *templateMethod, path string) (err error) {
 	)
 
 	srcFile.Type().Id("ParamsType").E().BlockFunc(func(group *Group) {
-		for _, v := range method.Args {
-			group.Id(v.Name).T().Id(v.Type.String()).Op(";")
+		for id, v := range method.Args {
+			if v.Type.String() == "object" {
+				group.Id(v.Name).T().BlockFunc(func(group *Group) {
+					for prName, pr := range sw.schemas[method.ArgsTypesMap[id]].Properties {
+						if pr.Type == "" {
+							group.Id(prName).T().BlockFunc(renderSchema(pr, sw))
+							continue
+						}
+						if pr.Type == "array" || pr.Type == "object" {
+							if pr.Nullable {
+								group.Id(prName).T().Id("Array").Op("<").Id("{}").Op("|").Id("null").Op(">").Op(";")
+							} else {
+								group.Id(prName).T().Id("Array").Op("<").Id("{}").Op(">").Op(";")
+							}
+							continue
+						}
+						if pr.Nullable {
+							group.Id(prName).T().Id(pr.Type).Op("|").Id("null").Op(";")
+						} else {
+							group.Id(prName).T().Id(pr.Type).Op(";")
+						}
+					}
+				})
+			} else {
+				group.Id(v.Name).T().Id(v.Type.String()).Op(";")
+			}
 		}
 	}).Op(";")
 	srcFile.Line()
@@ -171,13 +202,65 @@ func (svc *service) genTypes(method *templateMethod, path string) (err error) {
 	srcFile.Line()
 	srcFile.Export().Type().Id("ResponseType").E().Id("IResponse").Op("&").Block(
 		Id("data").T().BlockFunc(func(group *Group) {
-			for _, v := range method.Results {
-				group.Line().Add(Id(v.Name).T().Id(v.Type.String()).Op(";"))
+			for id, v := range method.Results {
+				if v.Type.String() == "object" {
+					group.Id(v.Name).T().BlockFunc(func(group *Group) {
+						for prName, pr := range sw.schemas[method.ResultsTypesMap[id]].Properties {
+							if pr.Type == "" {
+								group.Id(prName).T().BlockFunc(renderSchema(pr, sw))
+								continue
+							}
+							if pr.Type == "array" || pr.Type == "object" {
+								if pr.Nullable {
+									group.Id(prName).T().Id("Array").Op("<").Id("{}").Op("|").Id("null").Op(">").Op(";")
+								} else {
+									group.Id(prName).T().Id("Array").Op("<").Id("{}").Op(">").Op(";")
+								}
+								continue
+							}
+							if pr.Nullable {
+								group.Id(prName).T().Id(pr.Type).Op("|").Id("null").Op(";")
+							} else {
+								group.Id(prName).T().Id(pr.Type).Op(";")
+							}
+						}
+					})
+				} else {
+					group.Id(v.Name).T().Id(v.Type.String()).Op(";")
+				}
 			}
 		}).Op(";"),
 	).Op(";")
 
 	return srcFile.Save(path)
+}
+
+func renderSchema(schema swSchema, sw *swagger) func(group *Group) {
+	return func(group *Group) {
+		schemaRefParts := strings.Split(schema.Ref, "/")
+		schemaName := schemaRefParts[len(schemaRefParts)-1]
+		schema = sw.schemas[schemaName]
+		for prName, pr := range schema.Properties {
+			if pr.Type == "" {
+				group.Id(prName).T().BlockFunc(renderSchema(pr, sw))
+				continue
+			}
+			if pr.Type == "array" || pr.Type == "object" {
+				if pr.Nullable {
+					group.Id(prName).T().Id("Array").Op("<").Id("{}").Op("|").Id("null").Op(">").Op(";")
+				} else {
+					group.Id(prName).T().Id("Array").Op("<").Id("{}").Op(">").Op(";")
+				}
+				continue
+			}
+			if pr.Nullable {
+				group.Id(prName).T().Id(pr.Type).Op("|").Id("null").Op(";")
+			} else {
+				group.Id(prName).T().Id(pr.Type).Op(";")
+			}
+		}
+		return
+	}
 }
 
 func (svc *service) genRequest(method *templateMethod, path string) (err error) {

@@ -18,7 +18,7 @@ require (
 	github.com/rogpeppe/go-internal v1.6.0
 	github.com/savsgio/gotils v0.0.0-20200616100644-13ff1fd2c28c
 	github.com/seniorGolang/dumper v1.2.0
-	github.com/seniorGolang/gokit v1.0.17 // indirect
+	github.com/seniorGolang/gokit v1.0.17
 	github.com/sirupsen/logrus v1.6.0
 	github.com/stretchr/testify v1.4.0 // indirect
 	github.com/uber/jaeger-client-go v2.24.0+incompatible
