@@ -44,6 +44,9 @@ func tsFunctionConverter(function *types.Function, interfaceBase types.Base, sw 
 		if typeMap[v.Type.String()] != "" {
 			v.Type = types.TName{TypeName: typeMap[v.Type.String()]}
 			newArgs = append(newArgs, v)
+		} else if _, ok := v.Type.(types.TArray); ok {
+			v.Type = types.TName{TypeName: "array"}
+			newArgs = append(newArgs, v)
 		} else {
 			tmpType := v.Type.String()
 			typeStrings := strings.Split(tmpType, ".")
@@ -63,6 +66,25 @@ func tsFunctionConverter(function *types.Function, interfaceBase types.Base, sw 
 		if typeMap[v.Type.String()] != "" {
 			v.Type = types.TName{TypeName: typeMap[v.Type.String()]}
 			newResults = append(newResults, v)
+		} else if arrayType, ok := v.Type.(types.TArray); ok {
+			if typeMap[arrayType.Next.String()] != "" {
+				resultsTypesMap[len(newResults)] = typeMap[arrayType.Next.String()]
+				v.Type = types.TName{TypeName: "array"}
+				newArgs = append(newArgs, v)
+			} else {
+				tmpType := v.Type.String()
+				typeStrings := strings.Split(tmpType, ".")
+				if len(typeStrings) == 2 {
+					if _, ok := sw.schemas[typeStrings[1]]; ok {
+						resultsTypesMap[len(newResults)] = typeStrings[1]
+						v.Type = types.TName{TypeName: "object"}
+						newResults = append(newResults, v)
+					}
+				}
+			}
+			resultsTypesMap[len(newResults)] = arrayType.Next.String()
+			v.Type = types.TName{TypeName: "array"}
+			newArgs = append(newArgs, v)
 		} else {
 			tmpType := v.Type.String()
 			typeStrings := strings.Split(tmpType, ".")

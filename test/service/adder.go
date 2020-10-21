@@ -17,7 +17,7 @@ type Adder interface {
 	Add(ctx context.Context, firstNumber, secondNumber float64) (sum float64, err error)
 
 	// @tg summary=`Получение uuid по id`
-	GetUUID(ctx context.Context, id int) (genUUID uuid.UUID, err error)
+	GetUUID(ctx context.Context, id []int) (genUUID uuid.UUID, err error)
 
 	// @tg summary=`Возвращает исходные данные`
 	DoNothing(ctx context.Context, thing types.CoolThing) (out types.CoolThing, err error)
