@@ -1,5 +1,5 @@
 package generator
-
+/*
 import (
 	"reflect"
 	"strings"
@@ -27,7 +27,6 @@ var (
 		"uuid.UUID": "string",
 	}
 )
-
 
 type templateMethod struct {
 	types.Base
@@ -108,3 +107,4 @@ func tsFunctionConverter(function *types.Function, interfaceBase types.Base, sw 
 		ResultsTypesMap: resultsTypesMap,
 	}
 }
+ */
