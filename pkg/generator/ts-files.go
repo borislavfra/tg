@@ -3,11 +3,11 @@ package generator
 import (
 	"os"
 	"path"
-	"sort"
 	"strings"
 
 	. "github.com/seniorGolang/tg/pkg/typescript"
 	"github.com/seniorGolang/tg/pkg/utils"
+	"github.com/vetcher/go-astra/types"
 )
 
 const (
@@ -39,34 +39,26 @@ func (svc *service) renderTSFiles(outDir string, sw *swagger) (err error) {
 		sw.registerStruct(method.responseStructName(), svc.pkgPath, method.tags, method.results())
 	}
 
-	convertedMethods := []*templateMethod{}
-	for _, originalMethod := range svc.Methods {
-		convertedMethods = append(convertedMethods, tsFunctionConverter(originalMethod, svc.Interface.Base, sw))
-	}
-	sort.Slice(convertedMethods, func(i, j int) bool {
-		return convertedMethods[i].InterfaceBase.Name < convertedMethods[j].InterfaceBase.Name
-	})
-
 	if _, err = os.Stat(outDir + indexF); os.IsNotExist(err) {
-		if err = svc.genIndex(convertedMethods, outDir+indexF); err != nil {
+		if err = svc.genIndex(svc.Methods, outDir+indexF); err != nil {
 			return
 		}
 	} else {
-		if err = svc.updateIndex(convertedMethods, outDir+indexF); err != nil {
+		if err = svc.updateIndex(svc.Methods, outDir+indexF); err != nil {
 			return
 		}
 	}
 	if _, err = os.Stat(outDir + apiCreatorF); os.IsNotExist(err) {
-		if err = svc.genApiCreator(convertedMethods, outDir+apiCreatorF); err != nil {
+		if err = svc.genApiCreator(svc.Methods, outDir+apiCreatorF); err != nil {
 			return
 		}
 	} else {
-		if err = svc.updateApiCreator(convertedMethods, outDir+apiCreatorF); err != nil {
+		if err = svc.updateApiCreator(svc.Methods, outDir+apiCreatorF); err != nil {
 			return
 		}
 	}
 
-	for _, method := range convertedMethods {
+	for _, method := range svc.Methods {
 		filePath := path.Join(outDir, svc.Name, utils.ToLowerCamel(method.Name))
 		if _, err = os.Stat(filePath); os.IsNotExist(err) {
 			if err = os.Mkdir(filePath, os.ModePerm); err != nil {
@@ -122,14 +114,14 @@ func (svc *service) genResponseSchema(schema swSchema, sw *swagger, path string)
 	return srcFile.Save(path)
 }
 
-func (svc *service) genMakeRequestConfig(method *templateMethod, path string) (err error) {
+func (svc *service) genMakeRequestConfig(method *types.Function, path string) (err error) {
 
 	srcFile := NewFile()
 
 	srcFile.Import("./response-schema", "responseSchema")
 	srcFile.Import("./types", "RequestParamsType")
 
-	srcFile.Const().Id("ENDPOINT").E().Id("'/" + method.InterfaceBase.Name + "/" + utils.ToLowerCamel(method.Name) + "'")
+	srcFile.Const().Id("ENDPOINT").E().Id("'/" + svc.Name + "/" + utils.ToLowerCamel(method.Name) + "'")
 	srcFile.Line()
 	srcFile.Export().Const().Id("makeRequestConfig").E().Params(
 		Values(
@@ -148,7 +140,7 @@ func (svc *service) genMakeRequestConfig(method *templateMethod, path string) (e
 	return srcFile.Save(path)
 }
 
-func (svc *service) genMethodIndex(method *templateMethod, path string) (err error) {
+func (svc *service) genMethodIndex(method *types.Function, path string) (err error) {
 
 	srcFile := NewFile()
 
@@ -227,7 +219,7 @@ func (svc *service) genTypes(request, response swSchema, sw *swagger, path strin
 	return srcFile.Save(path)
 }
 
-func (svc *service) genRequest(method *templateMethod, path string) (err error) {
+func (svc *service) genRequest(method *types.Function, path string) (err error) {
 
 	srcFile := NewFile()
 
@@ -241,15 +233,15 @@ func (svc *service) genRequest(method *templateMethod, path string) (err error) 
 	return srcFile.Save(path)
 }
 
-func (svc *service) genIndex(methods []*templateMethod, path string) (err error) {
+func (svc *service) genIndex(methods []*types.Function, path string) (err error) {
 
 	srcFile := NewFile()
 
 	for _, method := range methods {
 		srcFile.Export().Values(
-			Id("RequestParamsType").As().Id(method.InterfaceBase.Name+method.Name+"ParamsType"),
-			Id("ResponseType").As().Id(method.InterfaceBase.Name+method.Name+"ResponseType"),
-		).Op(" from ").Id("'./" + method.InterfaceBase.Name + "/" + utils.ToLowerCamel(method.Name) + "'").Op(";")
+			Id("RequestParamsType").As().Id(svc.Name+method.Name+"ParamsType"),
+			Id("ResponseType").As().Id(svc.Name+method.Name+"ResponseType"),
+		).Op(" from ").Id("'./" + svc.Name + "/" + utils.ToLowerCamel(method.Name) + "'").Op(";")
 	}
 
 	srcFile.Export().Block(Id("APICreator").As().Op("default")).Op(" from ").Id("'./api-creator'").Op(";")
@@ -257,19 +249,19 @@ func (svc *service) genIndex(methods []*templateMethod, path string) (err error)
 	return srcFile.Save(path)
 }
 
-func (svc *service) updateIndex(methods []*templateMethod, path string) (err error) {
+func (svc *service) updateIndex(methods []*types.Function, path string) (err error) {
 
 	srcFile := NewFile()
 
 	baseNames := []string{}
 	for _, method := range methods {
-		baseName := method.InterfaceBase.Name + method.Name
+		baseName := svc.Name + method.Name
 		baseNames = append(baseNames, baseName)
 
 		srcFile.Export().Values(
 			Id("RequestParamsType").As().Id(baseName+"ParamsType"),
 			Id("ResponseType").As().Id(baseName+"ResponseType"),
-		).Op(" from ").Id("'./" + method.InterfaceBase.Name + "/" + utils.ToLowerCamel(method.Name) + "'").Op(";")
+		).Op(" from ").Id("'./" + svc.Name + "/" + utils.ToLowerCamel(method.Name) + "'").Op(";")
 	}
 
 	if err = srcFile.CheckRepetition(path, baseNames); err != nil {
@@ -279,45 +271,37 @@ func (svc *service) updateIndex(methods []*templateMethod, path string) (err err
 	return srcFile.AppendAfter(path, "Type", ";")
 }
 
-func (svc *service) genApiCreator(methods []*templateMethod, path string) (err error) {
+func (svc *service) genApiCreator(methods []*types.Function, path string) (err error) {
 
 	srcFile := NewFile()
 
 	for _, method := range methods {
-		reqName := method.InterfaceBase.Name + method.Name + "Request"
-		srcFile.Import("./"+method.InterfaceBase.Name+"/"+utils.ToLowerCamel(method.Name), "request as "+reqName)
+		reqName := svc.Name + method.Name + "Request"
+		srcFile.Import("./"+svc.Name+"/"+utils.ToLowerCamel(method.Name), "request as "+reqName)
 	}
 	srcFile.Line().Add()
-	srcFile.Export().Const().Id("APICreator").E().BlockFunc(func(group *Group) {
-		prevIface := methods[0].InterfaceBase.Name
-		for i := 0; i < len(methods); i++ {
-			group.Id(methods[i].InterfaceBase.Name).T().BlockFunc(func(group *Group) {
-				for i < len(methods) {
-					if methods[i].InterfaceBase.Name != prevIface {
-						prevIface = methods[i].InterfaceBase.Name
-						break
-					}
-					group.Id(methods[i].Name + "Request").T().Id(methods[i].InterfaceBase.Name + methods[i].Name + "Request").Op(",")
-					i += 1
-				}
-			}).Op(",")
-		}
-	})
+	srcFile.Export().Const().Id("APICreator").E().Block(
+		Id(svc.Name).T().BlockFunc(func(group *Group) {
+			for i := range methods {
+				group.Id(methods[i].Name + "Request").T().Id(svc.Name + methods[i].Name + "Request").Op(",")
+			}
+		}).Op(","),
+	).Op(";")
 
 	return srcFile.Save(path)
 }
 
-func (svc *service) updateApiCreator(methods []*templateMethod, path string) (err error) {
+func (svc *service) updateApiCreator(methods []*types.Function, path string) (err error) {
 
 	srcFile := NewFile()
 
 	baseNames := []string{}
 	for _, method := range methods {
-		baseName := method.InterfaceBase.Name + method.Name
+		baseName := svc.Name + method.Name
 		baseNames = append(baseNames, baseName)
 
 		reqName := baseName + "Request"
-		srcFile.Import("./"+method.InterfaceBase.Name+"/"+utils.ToLowerCamel(method.Name), "request as "+reqName)
+		srcFile.Import("./"+svc.Name+"/"+utils.ToLowerCamel(method.Name), "request as "+reqName)
 	}
 
 	if err = srcFile.CheckRepetition(path, baseNames); err != nil {
@@ -329,19 +313,12 @@ func (svc *service) updateApiCreator(methods []*templateMethod, path string) (er
 	}
 
 	srcFile = NewFile()
-	prevIface := methods[0].InterfaceBase.Name
-	for i := 0; i < len(methods); i++ {
-		srcFile.Id(methods[i].InterfaceBase.Name).T().BlockFunc(func(group *Group) {
-			for i < len(methods) {
-				if methods[i].InterfaceBase.Name != prevIface {
-					prevIface = methods[i].InterfaceBase.Name
-					break
-				}
-				group.Id(methods[i].Name + "Request").T().Id(methods[i].InterfaceBase.Name + methods[i].Name + "Request").Op(",")
-				i += 1
-			}
-		}).Op(",")
-	}
+
+	srcFile.Id(svc.Name).T().BlockFunc(func(group *Group) {
+		for i := range methods {
+			group.Id(methods[i].Name + "Request").T().Id(svc.Name + methods[i].Name + "Request").Op(",")
+		}
+	}).Op(",")
 
 	return srcFile.AppendAfter(path, ":", "},")
 }

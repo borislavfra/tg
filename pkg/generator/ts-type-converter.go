@@ -1,4 +1,5 @@
 package generator
+
 /*
 import (
 	"reflect"
@@ -107,4 +108,4 @@ func tsFunctionConverter(function *types.Function, interfaceBase types.Base, sw 
 		ResultsTypesMap: resultsTypesMap,
 	}
 }
- */
+*/
