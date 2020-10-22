@@ -19,6 +19,12 @@ const (
 	apiCreatorF        = "/api-creator.ts"
 )
 
+var TSBasicTypes = map[string]bool{
+	"string":  true,
+	"number":  true,
+	"boolean": true,
+}
+
 func (svc *service) renderTSFiles(outDir string, sw *swagger) (err error) {
 
 	svc.Name = utils.ToLowerCamel(svc.Name)
@@ -67,7 +73,9 @@ func (svc *service) renderTSFiles(outDir string, sw *swagger) (err error) {
 				return
 			}
 		}
-		if err = svc.genResponseSchema(method, sw, filePath+responseSchemaF); err != nil {
+		responseSchemaName := "response" + svc.Name + method.Name
+
+		if err = svc.genResponseSchema(sw.schemas[responseSchemaName], sw, filePath+responseSchemaF); err != nil {
 			return
 		}
 		if err = svc.genMakeRequestConfig(method, filePath+makeRequestConfigF); err != nil {
@@ -87,7 +95,7 @@ func (svc *service) renderTSFiles(outDir string, sw *swagger) (err error) {
 	return
 }
 
-func (svc *service) genResponseSchema(method *templateMethod, sw *swagger, path string) (err error) {
+func (svc *service) genResponseSchema(schema swSchema, sw *swagger, path string) (err error) {
 
 	srcFile := NewFile()
 
@@ -95,35 +103,16 @@ func (svc *service) genResponseSchema(method *templateMethod, sw *swagger, path 
 
 	srcFile.Export().Const().Id("responseSchema").E().Id("Joi.object").Params(
 		ValuesFunc(func(group *Group) {
-			for id, v := range method.Results {
-				if v.Type.String() == "object" {
-					group.Id(v.Name).T().Id("Joi.object").Params(ValuesFunc(func(group *Group) {
-						for prName, pr := range sw.schemas[method.ResultsTypesMap[id]].Properties {
-							if pr.Type == "" {
-								group.Id(prName).T().Id("Joi.object").Params(BlockFunc(renderResponseSchema(pr, sw)))
-								continue
-							}
-							if pr.Type == "array" || pr.Type == "object" {
-								if pr.Nullable {
-									group.Id(prName).T().Id("Joi.array").Call().Dot("required").Call().Dot("allow").Call(Id("null"))
-								} else {
-									group.Id(prName).T().Id("Joi.array").Call().Dot("required").Call()
-								}
-								continue
-							}
-							if pr.Nullable {
-								group.Id(prName).T().Id("Joi").Dot(pr.Type).Call().Dot("required").Call().Dot("allow").Call(Id("null"))
-							} else {
-								group.Id(prName).T().Id("Joi").Dot(pr.Type).Call().Dot("required").Call()
-							}
-						}
-					}))
-				} else if v.Type.String() == "array" {
-					group.Id(v.Base.Name).T().Id("Joi.array").Call().Dot("items").ParamsFunc(func(group *Group) {
-
-					})
-				} else {
-					group.Id(v.Base.Name).T().Id("Joi").Dot(v.Type.String()).Call().Dot("required").Call()
+			for prName, v := range schema.Properties {
+				switch v.Type {
+				case "":
+					group.Id(prName).T().Id("Joi.object").Params(ValuesFunc(
+						renderResponseSchema(v, sw),
+					)).Dot("unknown").Call()
+				case "array":
+					processArrayForResponseScheme(group, v, prName, sw)
+				default:
+					group.Id(prName).T().Id("Joi").Dot(v.Type).Call().Dot("required").Call()
 				}
 			}
 		}),
@@ -380,22 +369,38 @@ func (svc *service) updateApiCreator(methods []*templateMethod, path string) (er
 
 func renderResponseSchema(schema swSchema, sw *swagger) func(group *Group) {
 	return func(group *Group) {
+
+		if schema.Properties == nil && schema.Type != "" {
+			if schema.Nullable {
+				group.Id("Joi").Dot(schema.Type).Call().Dot("required").Call().Dot("allow").Call(Id("null"))
+			} else {
+				group.Id("Joi").Dot(schema.Type).Call().Dot("required").Call()
+			}
+			return
+		}
+
 		schemaRefParts := strings.Split(schema.Ref, "/")
 		schemaName := schemaRefParts[len(schemaRefParts)-1]
 		schema = sw.schemas[schemaName]
 		for prName, pr := range schema.Properties {
-			if pr.Type == "" {
-				group.Id(prName).T().Id("Joi.object").Params(BlockFunc(renderResponseSchema(pr, sw)))
-			} else if pr.Type == "array" || pr.Type == "object" {
+			switch pr.Type {
+			case "":
+
+				group.Id(prName).T().Id("Joi.object").Params(ValuesFunc(renderResponseSchema(pr, sw))).Dot("unknown").Call()
+			case "array":
+				processArrayForResponseScheme(group, pr, prName, sw)
+			case "object":
 				if pr.Nullable {
-					group.Id(prName).T().Id("Joi.array").Call().Dot("required").Call().Dot("allow").Call(Id("null"))
+					group.Id(prName).T().Id("Joi.object").Params(ValuesFunc(renderResponseSchema(schema, sw))).Dot("unknown").Call().Dot("allow").Call(Id("null"))
 				} else {
-					group.Id(prName).T().Id("Joi.array").Call().Dot("required").Call()
+					group.Id(prName).T().Id("Joi.object").Params(ValuesFunc(renderResponseSchema(schema, sw))).Dot("unknown").Call()
 				}
-			} else if pr.Nullable {
-				group.Id(prName).T().Id("Joi").Dot(pr.Type).Call().Dot("required").Call().Dot("allow").Call(Id("null"))
-			} else {
-				group.Id(prName).T().Id("Joi").Dot(pr.Type).Call().Dot("required").Call()
+			default:
+				if pr.Nullable {
+					group.Id(prName).T().Id("Joi").Dot(pr.Type).Call().Dot("required").Call().Dot("allow").Call(Id("null"))
+				} else {
+					group.Id(prName).T().Id("Joi").Dot(pr.Type).Call().Dot("required").Call()
+				}
 			}
 		}
 		return
@@ -424,4 +429,34 @@ func renderTypesSchema(schema swSchema, sw *swagger) func(group *Group) {
 		}
 		return
 	}
+}
+
+func processArrayForResponseScheme(group *Group, pr swSchema, prName string, sw *swagger) {
+	if isBasicType(pr.Items.Type) {
+		if pr.Nullable {
+			group.Id(prName).T().Id("Joi.array").Call().
+				Dot("items").ParamsFunc(renderResponseSchema(*pr.Items, sw)).Dot("required").Call().Dot("allow").Call(Id("null"))
+		} else {
+			group.Id(prName).T().Id("Joi.array").Call().
+				Dot("items").ParamsFunc(renderResponseSchema(*pr.Items, sw)).Dot("required").Call()
+		}
+	} else {
+		if pr.Nullable {
+			group.Id(prName).T().Id("Joi.array").Call().
+				Dot("items").Params(
+				Id("Joi.object").Call(ValuesFunc(
+					renderResponseSchema(*pr.Items, sw)),
+				)).Dot("required").Call().Dot("allow").Call(Id("null"))
+		} else {
+			group.Id(prName).T().Id("Joi.array").Call().
+				Dot("items").Params(
+				Id("Joi.object").Call(ValuesFunc(
+					renderResponseSchema(*pr.Items, sw)),
+				)).Dot("required").Call()
+		}
+	}
+}
+
+func isBasicType(name string) bool {
+	return TSBasicTypes[name]
 }

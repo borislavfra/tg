@@ -28,6 +28,7 @@ var (
 	}
 )
 
+
 type templateMethod struct {
 	types.Base
 	InterfaceBase   types.Base

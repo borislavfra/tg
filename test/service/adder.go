@@ -14,11 +14,11 @@ import (
 // @tg jsonRPC-server log trace metrics
 type Adder interface {
 	// @tg summary=`Получение суммы двух чисел`
-	Add(ctx context.Context, firstNumber, secondNumber float64) (sum float64, err error)
+	Add(ctx context.Context, firstNumber, secondNumber float64) (sum float64, division []float64, err error)
 
 	// @tg summary=`Получение uuid по id`
-	GetUUID(ctx context.Context, id []int) (genUUID uuid.UUID, err error)
+	GetUUID(ctx context.Context, id []int) (genUUID uuid.UUID, cools []types.CoolThing, err error)
 
 	// @tg summary=`Возвращает исходные данные`
-	DoNothing(ctx context.Context, thing types.CoolThing) (out types.CoolThing, err error)
+	DoNothing(ctx context.Context, thing types.CoolThing) (out types.CoolThing, testMap map[string]int, err error)
 }
