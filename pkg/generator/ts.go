@@ -1,24 +1,31 @@
 package generator
 
 import (
-	"github.com/seniorGolang/tg/pkg/utils"
 	"os"
 	"path"
+
+	"github.com/seniorGolang/tg/pkg/utils"
 )
 
 const (
 	indexF             = "/index.ts"
-	responseSchemaF    = "/response-schema.ts"
 	makeRequestConfigF = "/make-request-config.ts"
 	typesF             = "/types.ts"
 	requestF           = "/request.ts"
 	apiCreatorF        = "/api-creator.ts"
+	getSchemasF        = "/get-schemas.ts"
 )
 
 var TSBasicTypes = map[string]bool{
 	"string":  true,
 	"number":  true,
 	"boolean": true,
+}
+
+type commonDirRenderer struct {
+	name       string
+	fileName   string
+	renderFunc func(svc *service, path string) (err error)
 }
 
 type ts struct {
@@ -64,6 +71,40 @@ func (tsDoc *ts) render(outDir string) (err error) {
 			}
 		}
 
+		var commonDirs = []commonDirRenderer{
+			{
+				name:       "_methods",
+				fileName:   indexF,
+				renderFunc: tsDoc.genMethods,
+			},
+			{
+				name:       "_schemas",
+				fileName:   indexF,
+				renderFunc: tsDoc.genSchemas,
+			},
+			{
+				name:       "_types",
+				fileName:   indexF,
+				renderFunc: tsDoc.genTypes,
+			},
+			{
+				name:       "batched",
+				fileName:   "",
+				renderFunc: tsDoc.genBatched,
+			},
+		}
+		for _, dir := range commonDirs {
+			filePath := path.Join(outDir, svc.Name, dir.name)
+			if _, err = os.Stat(filePath); os.IsNotExist(err) {
+				if err = os.Mkdir(filePath, os.ModePerm); err != nil {
+					return
+				}
+			}
+			if err = dir.renderFunc(svc, filePath+dir.fileName); err != nil {
+				return
+			}
+		}
+
 		for _, method := range svc.Methods {
 			filePath := path.Join(outDir, svc.Name, utils.ToLowerCamel(method.Name))
 			if _, err = os.Stat(filePath); os.IsNotExist(err) {
@@ -71,16 +112,11 @@ func (tsDoc *ts) render(outDir string) (err error) {
 					return
 				}
 			}
-			responseSchemaName := "response" + svc.Name + method.Name
-			requestSchemaName := "request" + svc.Name + method.Name
 
-			if err = tsDoc.genResponseSchema(tsDoc.schemas[responseSchemaName], filePath+responseSchemaF); err != nil {
-				return
-			}
 			if err = tsDoc.genMakeRequestConfig(method, filePath+makeRequestConfigF, svc); err != nil {
 				return
 			}
-			if err = tsDoc.genTypes(tsDoc.schemas[requestSchemaName], tsDoc.schemas[responseSchemaName], filePath+typesF); err != nil {
+			if err = tsDoc.genMethodTypes(filePath+typesF, svc.Name, method.Name); err != nil {
 				return
 			}
 			if err = tsDoc.genMethodIndex(filePath + indexF); err != nil {

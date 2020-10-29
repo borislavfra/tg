@@ -130,6 +130,58 @@ func (s *Statement) ValuesFunc(f func(*Group)) *Statement {
 	return s
 }
 
+// Union renders a comma separated list enclosed by curly braces. Use for slice or composite literals.
+func Union(values ...Code) *Statement {
+	return newStatement().Union(values...)
+}
+
+// Union renders a comma separated list enclosed by curly braces. Use for slice or composite literals.
+func (g *Group) Union(values ...Code) *Statement {
+	s := Union(values...)
+	g.items = append(g.items, s)
+	return s
+}
+
+// Union renders a comma separated list enclosed by curly braces. Use for slice or composite literals.
+func (s *Statement) Union(values ...Code) *Statement {
+	g := &Group{
+		close:     "",
+		items:     values,
+		multi:     false,
+		name:      "union",
+		open:      "",
+		separator: " | ",
+	}
+	*s = append(*s, g)
+	return s
+}
+
+// UnionFunc renders a comma separated list enclosed by curly braces. Use for slice or composite literals.
+func UnionFunc(f func(*Group)) *Statement {
+	return newStatement().UnionFunc(f)
+}
+
+// UnionFunc renders a comma separated list enclosed by curly braces. Use for slice or composite literals.
+func (g *Group) UnionFunc(f func(*Group)) *Statement {
+	s := UnionFunc(f)
+	g.items = append(g.items, s)
+	return s
+}
+
+// UnionFunc renders a comma separated list enclosed by curly braces. Use for slice or composite literals.
+func (s *Statement) UnionFunc(f func(*Group)) *Statement {
+	g := &Group{
+		close:     "",
+		multi:     false,
+		name:      "union",
+		open:      "",
+		separator: " | ",
+	}
+	f(g)
+	*s = append(*s, g)
+	return s
+}
+
 // Index renders a colon separated list enclosed by square brackets. Use for array / slice indexes and definitions.
 func Index(items ...Code) *Statement {
 	return newStatement().Index(items...)

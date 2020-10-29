@@ -228,6 +228,16 @@ func (s *Statement) Generic(name string) *Statement {
 	return s
 }
 
+func (s *Statement) SingleQ(name string) *Statement {
+
+	t := token{
+		typ:     operatorToken,
+		content: "'" + name + "'",
+	}
+	*s = append(*s, t)
+	return s
+}
+
 // Op renders the provided operator / token.
 func (s *Statement) T() *Statement {
 
