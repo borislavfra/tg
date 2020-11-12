@@ -14,7 +14,7 @@ func (tsDoc *ts) genMakeRequestConfig(method *types.Function, path string, svc *
 	srcFile := NewFile()
 
 	srcFile.Import("../_schemas", "SCHEMAS")
-	srcFile.Import("./types", "RequestParamsType")
+	srcFile.Import("./_types", "RequestParamsType")
 
 	srcFile.Const().Id("ENDPOINT").E().Id("'/" + svc.Name + "/" + utils.ToLowerCamel(method.Name) + "'")
 	srcFile.Line()
@@ -39,7 +39,7 @@ func (tsDoc *ts) genMethodIndex(path string) (err error) {
 	srcFile := NewFile()
 
 	srcFile.Export().Op("* ").Op("from ").Id("'./request'")
-	srcFile.Export().Op("* ").Op("from ").Id("'./types'")
+	srcFile.Export().Op("* ").Op("from ").Id("'./_types'")
 
 	return srcFile.Save(path)
 }
@@ -47,32 +47,19 @@ func (tsDoc *ts) genMethodIndex(path string) (err error) {
 func (tsDoc *ts) genMethodTypes(path string, svcName, methodName string) (err error) {
 
 	requestParamsType := strings.Title(svcName) + methodName + "ParamsType"
+	responseType := strings.Title(svcName) + methodName + "ResponseType"
 	srcFile := NewFile()
 
-	srcFile.Import(
-		"@mihanizm56/fetch-api",
-
-		"TranslateFunction",
-		"ExtraValidationCallback",
-		"ProgressOptions",
-		"CustomSelectorDataType",
-	)
-	srcFile.Import("../_types", requestParamsType)
-	srcFile.Line()
-	srcFile.Type().Id("FetchParamsType").E().Block(
-		Id("translateFunction").Op("?").T().Id("TranslateFunction").Op(";"),
-		Id("isErrorTextStraightToOutput").Op("?").T().Id("boolean").Op(";"),
-		Id("extraValidationCallback").Op("?").T().Id("ExtraValidationCallback").Op(";"),
-		Id("customTimeout").Op("?").T().Id("number").Op(";"),
-		Id("abortRequestId").Op("?").T().Id("string").Op(";"),
-		Id("progressOptions").Op("?").T().Id("ProgressOptions").Op(";"),
-		Id("customSelectorData").Op("?").T().Id("CustomSelectorDataType").Op(";"),
-		Id("selectData").Op("?").T().Id("string").Op(";"),
-	).Op(";")
+	srcFile.Import("@mihanizm56/fetch-api", "IResponse")
+	srcFile.Import("../../_types", "FetchParamsType")
+	srcFile.Import("../_types", requestParamsType, responseType)
 	srcFile.Line()
 	srcFile.Export().Type().Id("RequestParamsType").E().Block(
 		Id("bodyParams").T().Id(requestParamsType).Op(";"),
 		Id("additionalFetchParams").Op("?").T().Id("FetchParamsType").Op(";"),
+	).Op(";")
+	srcFile.Export().Type().Id("ResponseType").E().Id("IResponse").Op("&").Block(
+		Id("data").T().Id(responseType).Op(";"),
 	).Op(";")
 
 	return srcFile.Save(path)
@@ -82,11 +69,11 @@ func (tsDoc *ts) genRequest(path string) (err error) {
 
 	srcFile := NewFile()
 
-	srcFile.Import("@mihanizm56/fetch-api", "JSONRPCRequest", "IResponse")
+	srcFile.Import("@mihanizm56/fetch-api", "JSONRPCRequest")
 	srcFile.Import("./make-request-config", "makeRequestConfig")
-	srcFile.Import("./types", "RequestParamsType")
+	srcFile.Import("./_types", "RequestParamsType", "ResponseType")
 
-	srcFile.Export().Const().Id("request").E().Params(Id("values").T().Id("RequestParamsType")).T().Id("Promise").Generic("IResponse").Op("=>")
+	srcFile.Export().Const().Id("request").E().Params(Id("values").T().Id("RequestParamsType")).T().Id("Promise").Generic("ResponseType").Op("=>")
 	srcFile.New(Id("JSONRPCRequest").Call().Dot("makeRequest").Call(Id("makeRequestConfig").Params(Id("values")))).Op(";")
 
 	return srcFile.Save(path)
@@ -317,6 +304,80 @@ func (tsDoc *ts) genTypes(svc *service, path string) (err error) {
 	return srcFile.Save(path)
 }
 
+func (tsDoc *ts) genHTTPTypes(svc *service, path string) (err error) {
+
+	srcFile := NewFile()
+
+	responseSchemas := map[string]tsSchema{}
+	requestSchemas := map[string]tsSchema{}
+	for i := range svc.methods {
+		responseSchemaName := "response" + svc.Name + svc.methods[i].Name
+		requestSchemaName := "request" + svc.Name + svc.methods[i].Name
+		if schema, ok := tsDoc.schemas[responseSchemaName]; ok {
+			responseSchemas[svc.methods[i].Name] = schema
+		}
+		if schema, ok := tsDoc.schemas[requestSchemaName]; ok {
+			requestSchemas[svc.methods[i].Name] = schema
+		}
+	}
+
+	for methodName, request := range requestSchemas {
+		srcFile.Export().Type().Id(strings.Title(svc.Name) + methodName + "ParamsType").E().BlockFunc(func(group *Group) {
+			for prName, schema := range request.Properties {
+				switch schema.Type {
+				case "":
+					group.Id(prName).T().BlockFunc(renderTypesSchema(schema, tsDoc)).Op(";")
+				case "array":
+					if schema.Nullable {
+						group.Id(prName).T().Id("Array").Op("<").Id("{}").Op("|").Id("null").Op(">").Op(";")
+					} else {
+						group.Id(prName).T().Id("Array").Op("<").Id("{}").Op(">").Op(";")
+					}
+				default:
+					group.Id(prName).T().Id(schema.Type).Op(";")
+				}
+			}
+		}).Op(";")
+		srcFile.Line()
+	}
+
+	for methodName, response := range responseSchemas {
+		respSchema := response.Properties["response"]
+		schemaRefParts := strings.Split(respSchema.Ref, "/")
+		schemaName := schemaRefParts[len(schemaRefParts)-1]
+		respSchema = tsDoc.schemas[schemaName].Properties["data"]
+
+		srcFile.Export().Type().Id(strings.Title(svc.Name) + methodName + "ResponseType").E().BlockFunc(renderTypesSchema(respSchema, tsDoc)).Op(";")
+		srcFile.Line()
+	}
+
+	return srcFile.Save(path)
+}
+
+func (tsDoc *ts) genHTTPSchemas(svc *service, path string) (err error) {
+	srcFile := NewFile()
+
+	schemas := map[string]tsSchema{}
+	for i := range svc.methods {
+		responseSchemaName := "response" + svc.Name + svc.methods[i].Name
+		if schema, ok := tsDoc.schemas[responseSchemaName]; ok {
+			schemas[svc.methods[i].Name] = schema
+		}
+	}
+	srcFile.Line().Add(Id("import Joi from '@hapi/joi';"))
+	srcFile.Export().Const().Id("SCHEMAS").E().ValuesFunc(func(group *Group) {
+		for methodName, schema := range schemas {
+			respSchema := schema.Properties["response"]
+			schemaRefParts := strings.Split(respSchema.Ref, "/")
+			schemaName := schemaRefParts[len(schemaRefParts)-1]
+			respSchema = tsDoc.schemas[schemaName].Properties["data"]
+			group.Id(utils.ToLowerCamel(methodName)).T().Id("Joi.object").Params(ValuesFunc(renderResponseSchema(respSchema, tsDoc)))
+		}
+	}).Op(";")
+
+	return srcFile.Save(path)
+}
+
 func (tsDoc *ts) genBatched(svc *service, batchedPath string) (err error) {
 
 	err = tsDoc.genMethodIndex(batchedPath + indexF)
@@ -329,7 +390,7 @@ func (tsDoc *ts) genBatched(svc *service, batchedPath string) (err error) {
 	}
 
 	mrcFile := NewFile()
-	mrcFile.Import("./types", "RequestParamsType")
+	mrcFile.Import("./_types", "RequestParamsType")
 	mrcFile.Import("./_utils/get-schemas", "getSchemas")
 	mrcFile.Line()
 	mrcFile.Const().Id("ENDPOINT").E().SingleQ("/" + svc.Name).Op(";")
@@ -351,14 +412,7 @@ func (tsDoc *ts) genBatched(svc *service, batchedPath string) (err error) {
 
 	typesFile := NewFile()
 	typesFile.Import(
-		"@mihanizm56/fetch-api",
-
-		"IResponse",
-		"TranslateFunction",
-		"ExtraValidationCallback",
-		"ProgressOptions",
-		"CustomSelectorDataType",
-	)
+		"@mihanizm56/fetch-api", "IResponse")
 	typesFile.Import("../_methods", "METHODS")
 	requestParams, responseParams := func() (requests, responses []string) {
 		svcCap := strings.Title(svc.Name)
@@ -372,6 +426,7 @@ func (tsDoc *ts) genBatched(svc *service, batchedPath string) (err error) {
 		"../_types",
 		append(requestParams, responseParams...)...,
 	)
+	typesFile.Import("../../_types", "FetchParamsType")
 	typesFile.Line()
 	typesFile.Export().Type().Id("BatchedParamsType").E().Block(
 		Id("method").T().Id("keyof typeof ").Id("METHODS").Op(";"),
@@ -380,17 +435,6 @@ func (tsDoc *ts) genBatched(svc *service, batchedPath string) (err error) {
 				group.Id(requestParams[i])
 			}
 		}).Op(";"),
-	).Op(";")
-	typesFile.Line()
-	typesFile.Type().Id("FetchParamsType").E().Block(
-		Id("translateFunction").Op("?").T().Id("TranslateFunction").Op(";"),
-		Id("isErrorTextStraightToOutput").Op("?").T().Id("boolean").Op(";"),
-		Id("extraValidationCallback").Op("?").T().Id("ExtraValidationCallback").Op(";"),
-		Id("customTimeout").Op("?").T().Id("number").Op(";"),
-		Id("abortRequestId").Op("?").T().Id("string").Op(";"),
-		Id("progressOptions").Op("?").T().Id("ProgressOptions").Op(";"),
-		Id("customSelectorData").Op("?").T().Id("CustomSelectorDataType").Op(";"),
-		Id("selectData").Op("?").T().Id("string").Op(";"),
 	).Op(";")
 	typesFile.Line()
 	typesFile.Export().Type().Id("RequestParamsType").E().Block(
@@ -417,7 +461,7 @@ func (tsDoc *ts) genBatched(svc *service, batchedPath string) (err error) {
 	}
 	gsFile := NewFile()
 	gsFile.Import("../../_schemas", "SCHEMAS")
-	gsFile.Import("../types", "BatchedParamsType")
+	gsFile.Import("../_types", "BatchedParamsType")
 	gsFile.Line()
 	gsFile.Export().Const().Id("getSchemas").
 		E().Params(Id("options").T().Id("Array").Op("<").Id("BatchedParamsType").Op(">")).Op("=>").
@@ -427,4 +471,29 @@ func (tsDoc *ts) genBatched(svc *service, batchedPath string) (err error) {
 	}
 
 	return
+}
+
+func (tsDoc *ts) genGeneralTypes(path string) (err error) {
+
+	srcFile := NewFile()
+
+	srcFile.Import(
+		"@mihanizm56/fetch-api/dist/types",
+		"ExtraValidationCallbackType",
+		"TranslateFunctionType",
+		"ProgressOptionsType",
+		"CustomSelectorDataType",
+	)
+	srcFile.Export().Type().Id("FetchParamsType").E().Block(
+		Id("translateFunction").Op("?").T().Id("TranslateFunction").Op(";"),
+		Id("isErrorTextStraightToOutput").Op("?").T().Id("boolean").Op(";"),
+		Id("extraValidationCallback").Op("?").T().Id("ExtraValidationCallback").Op(";"),
+		Id("customTimeout").Op("?").T().Id("number").Op(";"),
+		Id("abortRequestId").Op("?").T().Id("string").Op(";"),
+		Id("progressOptions").Op("?").T().Id("ProgressOptions").Op(";"),
+		Id("customSelectorData").Op("?").T().Id("CustomSelectorDataType").Op(";"),
+		Id("selectData").Op("?").T().Id("string").Op(";"),
+	).Op(";")
+
+	return srcFile.Save(path)
 }

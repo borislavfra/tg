@@ -10,7 +10,7 @@ import (
 const (
 	indexF             = "/index.ts"
 	makeRequestConfigF = "/make-request-config.ts"
-	typesF             = "/types.ts"
+	typesF             = "/_types.ts"
 	requestF           = "/request.ts"
 	apiCreatorF        = "/api-creator.ts"
 	getSchemasF        = "/get-schemas.ts"
@@ -36,6 +36,16 @@ type ts struct {
 }
 
 func (tsDoc *ts) render(outDir string) (err error) {
+
+	filePath := path.Join(outDir, "_types")
+	if _, err = os.Stat(filePath); os.IsNotExist(err) {
+		if err = os.Mkdir(filePath, os.ModePerm); err != nil {
+			return
+		}
+		if err = tsDoc.genGeneralTypes(filePath + indexF); err != nil {
+			return
+		}
+	}
 
 	for _, svcName := range tsDoc.serviceKeys() {
 		svc := tsDoc.services[svcName]
@@ -174,6 +184,52 @@ func (tsDoc *ts) renderHTTPService(outDir string, svc *service) (err error) {
 		}
 	} else {
 		if err = tsDoc.updateApiCreator(svc.Methods, outDir+apiCreatorF, svc); err != nil {
+			return
+		}
+	}
+
+	var commonDirs = []commonDirRenderer{
+		{
+			name:       "_schemas",
+			fileName:   indexF,
+			renderFunc: tsDoc.genHTTPSchemas,
+		},
+		{
+			name:       "_types",
+			fileName:   indexF,
+			renderFunc: tsDoc.genHTTPTypes,
+		},
+	}
+	for _, dir := range commonDirs {
+		filePath := path.Join(outDir, svc.Name, dir.name)
+		if _, err = os.Stat(filePath); os.IsNotExist(err) {
+			if err = os.Mkdir(filePath, os.ModePerm); err != nil {
+				return
+			}
+		}
+		if err = dir.renderFunc(svc, filePath+dir.fileName); err != nil {
+			return
+		}
+	}
+
+	for _, method := range svc.Methods {
+		filePath := path.Join(outDir, svc.Name, utils.ToLowerCamel(method.Name))
+		if _, err = os.Stat(filePath); os.IsNotExist(err) {
+			if err = os.Mkdir(filePath, os.ModePerm); err != nil {
+				return
+			}
+		}
+
+		if err = tsDoc.genMakeRequestConfig(method, filePath+makeRequestConfigF, svc); err != nil {
+			return
+		}
+		if err = tsDoc.genMethodTypes(filePath+typesF, svc.Name, method.Name); err != nil {
+			return
+		}
+		if err = tsDoc.genMethodIndex(filePath + indexF); err != nil {
+			return
+		}
+		if err = tsDoc.genRequest(filePath + requestF); err != nil {
 			return
 		}
 	}
