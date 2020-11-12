@@ -25,14 +25,14 @@ func renderResponseSchema(schema tsSchema, sw *ts) func(group *Group) {
 			switch pr.Type {
 			case "":
 
-				group.Id(prName).T().Id("Joi.object").Params(ValuesFunc(renderResponseSchema(pr, sw))).Dot("unknown").Call()
+				group.Id(prName).T().Id("Joi.object").Params(ValuesFunc(renderResponseSchema(pr, sw)))
 			case "array":
 				processArrayForResponseScheme(group, pr, prName, sw)
 			case "object":
 				if pr.Nullable {
-					group.Id(prName).T().Id("Joi.object").Params(ValuesFunc(renderResponseSchema(schema, sw))).Dot("unknown").Call().Dot("allow").Call(Id("null"))
+					group.Id(prName).T().Id("Joi.object").Params(ValuesFunc(renderResponseSchema(schema, sw))).Dot("allow").Call(Id("null"))
 				} else {
-					group.Id(prName).T().Id("Joi.object").Params(ValuesFunc(renderResponseSchema(schema, sw))).Dot("unknown").Call()
+					group.Id(prName).T().Id("Joi.object").Params(ValuesFunc(renderResponseSchema(schema, sw)))
 				}
 			default:
 				if pr.Nullable {

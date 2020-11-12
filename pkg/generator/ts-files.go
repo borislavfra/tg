@@ -133,12 +133,15 @@ func (tsDoc *ts) updateIndex(methods []*types.Function, path string, svc *servic
 func (tsDoc *ts) genApiCreator(methods []*types.Function, path string, svc *service) (err error) {
 
 	srcFile := NewFile()
+	tmpMethods := methods
 
-	tmpMethods := append(methods, &types.Function{
-		Base: types.Base{
-			Name: "Batched",
-		},
-	})
+	if svc.tags.Contains(tagServerJsonRPC) {
+		tmpMethods = append(methods, &types.Function{
+			Base: types.Base{
+				Name: "Batched",
+			},
+		})
+	}
 
 	for i := range tmpMethods {
 		reqName := svc.Name + tmpMethods[i].Name + "Request"
@@ -159,12 +162,15 @@ func (tsDoc *ts) genApiCreator(methods []*types.Function, path string, svc *serv
 func (tsDoc *ts) updateApiCreator(methods []*types.Function, path string, svc *service) (err error) {
 
 	srcFile := NewFile()
+	tmpMethods := methods
 
-	tmpMethods := append(methods, &types.Function{
-		Base: types.Base{
-			Name: "Batched",
-		},
-	})
+	if svc.tags.Contains(tagServerJsonRPC) {
+		tmpMethods = append(methods, &types.Function{
+			Base: types.Base{
+				Name: "Batched",
+			},
+		})
+	}
 
 	baseNames := []string{}
 	for _, method := range tmpMethods {
@@ -228,7 +234,7 @@ func (tsDoc *ts) genSchemas(svc *service, path string) (err error) {
 						case "":
 							group.Id(prName).T().Id("Joi.object").Params(ValuesFunc(
 								renderResponseSchema(v, tsDoc),
-							)).Dot("unknown").Call()
+							))
 						case "array":
 							processArrayForResponseScheme(group, v, prName, tsDoc)
 						default:
@@ -236,7 +242,7 @@ func (tsDoc *ts) genSchemas(svc *service, path string) (err error) {
 						}
 					}
 				}),
-			).Dot("unknown").Call()
+			)
 		}
 	}).Op(";")
 
