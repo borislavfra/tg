@@ -1,6 +1,7 @@
 package generator
 
 import (
+	"github.com/seniorGolang/tg/pkg/tags"
 	. "github.com/seniorGolang/tg/pkg/typescript"
 	"github.com/seniorGolang/tg/pkg/utils"
 	"github.com/vetcher/go-astra/types"
@@ -16,7 +17,12 @@ func (tsDoc *ts) genMakeRequestConfig(method *types.Function, path string, svc *
 	srcFile.Import("../_schemas", "SCHEMAS")
 	srcFile.Import("./_types", "RequestParamsType")
 
-	srcFile.Const().Id("ENDPOINT").E().Id("'/" + svc.Name + "/" + utils.ToLowerCamel(method.Name) + "'")
+	methodTags := tsDoc.tags.Merge(tags.ParseTags(method.Docs))
+	if methodTags.Contains(tagHttpPath) {
+		srcFile.Const().Id("ENDPOINT").E().SingleQ(methodTags[tagHttpPath])
+	} else {
+		srcFile.Const().Id("ENDPOINT").E().Id("'/" + svc.Name + "/" + utils.ToLowerCamel(method.Name) + "'")
+	}
 	srcFile.Line()
 	srcFile.Export().Const().Id("makeRequestConfig").E().Params(
 		Values(
@@ -485,12 +491,12 @@ func (tsDoc *ts) genGeneralTypes(path string) (err error) {
 		"CustomSelectorDataType",
 	)
 	srcFile.Export().Type().Id("FetchParamsType").E().Block(
-		Id("translateFunction").Op("?").T().Id("TranslateFunction").Op(";"),
+		Id("translateFunction").Op("?").T().Id("TranslateFunctionType").Op(";"),
 		Id("isErrorTextStraightToOutput").Op("?").T().Id("boolean").Op(";"),
-		Id("extraValidationCallback").Op("?").T().Id("ExtraValidationCallback").Op(";"),
+		Id("extraValidationCallback").Op("?").T().Id("ExtraValidationCallbackType").Op(";"),
 		Id("customTimeout").Op("?").T().Id("number").Op(";"),
 		Id("abortRequestId").Op("?").T().Id("string").Op(";"),
-		Id("progressOptions").Op("?").T().Id("ProgressOptions").Op(";"),
+		Id("progressOptions").Op("?").T().Id("ProgressOptionsType").Op(";"),
 		Id("customSelectorData").Op("?").T().Id("CustomSelectorDataType").Op(";"),
 		Id("selectData").Op("?").T().Id("string").Op(";"),
 	).Op(";")
