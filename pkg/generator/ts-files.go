@@ -1,7 +1,6 @@
 package generator
 
 import (
-	"github.com/seniorGolang/tg/pkg/tags"
 	. "github.com/seniorGolang/tg/pkg/typescript"
 	"github.com/seniorGolang/tg/pkg/utils"
 	"github.com/vetcher/go-astra/types"
@@ -10,16 +9,15 @@ import (
 	"strings"
 )
 
-func (tsDoc *ts) genMakeRequestConfig(method *types.Function, path string, svc *service) (err error) {
+func (tsDoc *ts) genMakeRequestConfig(method *method, path string, svc *service) (err error) {
 
 	srcFile := NewFile()
 
 	srcFile.Import("../_schemas", "SCHEMAS")
 	srcFile.Import("./_types", "RequestParamsType")
 
-	methodTags := tsDoc.tags.Merge(tags.ParseTags(method.Docs))
-	if methodTags.Contains(tagHttpPath) {
-		srcFile.Const().Id("ENDPOINT").E().SingleQ(methodTags[tagHttpPath])
+	if method.tags.Contains(tagHttpPath) || method.tags.Contains(gtgTagHttpPath) {
+		srcFile.Const().Id("ENDPOINT").E().SingleQ(method.tags[tagHttpPath] + method.tags[gtgTagHttpPath])
 	} else {
 		srcFile.Const().Id("ENDPOINT").E().Id("'/" + svc.Name + "/" + utils.ToLowerCamel(method.Name) + "'")
 	}
@@ -85,7 +83,7 @@ func (tsDoc *ts) genRequest(path string) (err error) {
 	return srcFile.Save(path)
 }
 
-func (tsDoc *ts) genIndex(methods []*types.Function, path string, svc *service) (err error) {
+func (tsDoc *ts) genIndex(methods []*method, path string, svc *service) (err error) {
 
 	srcFile := NewFile()
 
@@ -101,7 +99,7 @@ func (tsDoc *ts) genIndex(methods []*types.Function, path string, svc *service) 
 	return srcFile.Save(path)
 }
 
-func (tsDoc *ts) updateIndex(methods []*types.Function, path string, svc *service) (err error) {
+func (tsDoc *ts) updateIndex(methods []*method, path string, svc *service) (err error) {
 
 	srcFile := NewFile()
 
@@ -123,15 +121,17 @@ func (tsDoc *ts) updateIndex(methods []*types.Function, path string, svc *servic
 	return srcFile.AppendAfter(path, "from", ";")
 }
 
-func (tsDoc *ts) genApiCreator(methods []*types.Function, path string, svc *service) (err error) {
+func (tsDoc *ts) genApiCreator(methods []*method, path string, svc *service) (err error) {
 
 	srcFile := NewFile()
 	tmpMethods := methods
 
 	if svc.tags.Contains(tagServerJsonRPC) {
-		tmpMethods = append(methods, &types.Function{
-			Base: types.Base{
-				Name: "Batched",
+		tmpMethods = append(methods, &method{
+			Function: &types.Function{
+				Base: types.Base{
+					Name: "Batched",
+				},
 			},
 		})
 	}
@@ -152,15 +152,17 @@ func (tsDoc *ts) genApiCreator(methods []*types.Function, path string, svc *serv
 	return srcFile.Save(path)
 }
 
-func (tsDoc *ts) updateApiCreator(methods []*types.Function, path string, svc *service) (err error) {
+func (tsDoc *ts) updateApiCreator(methods []*method, path string, svc *service) (err error) {
 
 	srcFile := NewFile()
 	tmpMethods := methods
 
 	if svc.tags.Contains(tagServerJsonRPC) {
-		tmpMethods = append(methods, &types.Function{
-			Base: types.Base{
-				Name: "Batched",
+		tmpMethods = append(methods, &method{
+			Function: &types.Function{
+				Base: types.Base{
+					Name: "Batched",
+				},
 			},
 		})
 	}

@@ -13,7 +13,8 @@ import (
 )
 
 const (
-	mark = "@tg"
+	mark    = "@tg"
+	gtgmark = "@gtg"
 )
 
 type DocTags map[string]string
@@ -51,6 +52,18 @@ func ParseTags(docs []string) (tags DocTags) {
 		if strings.HasPrefix(doc, mark) {
 
 			values, _ := TagScanner(doc[len(mark):])
+
+			for k, v := range values {
+
+				if _, found := tags[k]; found {
+					tags[k] += "," + v
+				} else {
+					tags[k] = v
+				}
+			}
+		} else if strings.HasPrefix(doc, gtgmark) {
+
+			values, _ := TagScanner(doc[len(gtgmark):])
 
 			for k, v := range values {
 

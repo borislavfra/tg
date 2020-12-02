@@ -78,20 +78,20 @@ func (tsDoc *ts) renderJsonRPCService(outDir string, svc *service) (err error) {
 	}
 
 	if _, err = os.Stat(outDir + indexF); os.IsNotExist(err) {
-		if err = tsDoc.genIndex(svc.Methods, outDir+indexF, svc); err != nil {
+		if err = tsDoc.genIndex(svc.methods, outDir+indexF, svc); err != nil {
 			return
 		}
 	} else {
-		if err = tsDoc.updateIndex(svc.Methods, outDir+indexF, svc); err != nil {
+		if err = tsDoc.updateIndex(svc.methods, outDir+indexF, svc); err != nil {
 			return
 		}
 	}
 	if _, err = os.Stat(outDir + apiCreatorF); os.IsNotExist(err) {
-		if err = tsDoc.genApiCreator(svc.Methods, outDir+apiCreatorF, svc); err != nil {
+		if err = tsDoc.genApiCreator(svc.methods, outDir+apiCreatorF, svc); err != nil {
 			return
 		}
 	} else {
-		if err = tsDoc.updateApiCreator(svc.Methods, outDir+apiCreatorF, svc); err != nil {
+		if err = tsDoc.updateApiCreator(svc.methods, outDir+apiCreatorF, svc); err != nil {
 			return
 		}
 	}
@@ -130,7 +130,7 @@ func (tsDoc *ts) renderJsonRPCService(outDir string, svc *service) (err error) {
 		}
 	}
 
-	for _, method := range svc.Methods {
+	for _, method := range svc.methods {
 		filePath := path.Join(outDir, svc.Name, utils.ToLowerCamel(method.Name))
 		if _, err = os.Stat(filePath); os.IsNotExist(err) {
 			if err = os.Mkdir(filePath, os.ModePerm); err != nil {
@@ -170,20 +170,20 @@ func (tsDoc *ts) renderHTTPService(outDir string, svc *service) (err error) {
 	}
 
 	if _, err = os.Stat(outDir + indexF); os.IsNotExist(err) {
-		if err = tsDoc.genIndex(svc.Methods, outDir+indexF, svc); err != nil {
+		if err = tsDoc.genIndex(svc.methods, outDir+indexF, svc); err != nil {
 			return
 		}
 	} else {
-		if err = tsDoc.updateIndex(svc.Methods, outDir+indexF, svc); err != nil {
+		if err = tsDoc.updateIndex(svc.methods, outDir+indexF, svc); err != nil {
 			return
 		}
 	}
 	if _, err = os.Stat(outDir + apiCreatorF); os.IsNotExist(err) {
-		if err = tsDoc.genApiCreator(svc.Methods, outDir+apiCreatorF, svc); err != nil {
+		if err = tsDoc.genApiCreator(svc.methods, outDir+apiCreatorF, svc); err != nil {
 			return
 		}
 	} else {
-		if err = tsDoc.updateApiCreator(svc.Methods, outDir+apiCreatorF, svc); err != nil {
+		if err = tsDoc.updateApiCreator(svc.methods, outDir+apiCreatorF, svc); err != nil {
 			return
 		}
 	}
@@ -212,7 +212,7 @@ func (tsDoc *ts) renderHTTPService(outDir string, svc *service) (err error) {
 		}
 	}
 
-	for _, method := range svc.Methods {
+	for _, method := range svc.methods {
 		filePath := path.Join(outDir, svc.Name, utils.ToLowerCamel(method.Name))
 		if _, err = os.Stat(filePath); os.IsNotExist(err) {
 			if err = os.Mkdir(filePath, os.ModePerm); err != nil {

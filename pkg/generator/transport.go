@@ -47,6 +47,9 @@ const (
 	tagHttpResponse  = "http-response"
 	tagPackageUUID   = "uuidPackage"
 	tagSwaggerTags   = "swaggerTags"
+
+	gtgTagHttpPath   = "http-server-uri-path"
+	gtgTagMethodHTTP = "http-server-method"
 )
 
 type Transport struct {
